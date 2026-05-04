@@ -18,9 +18,13 @@ class User(Base):
 
 class UserData(Base):
     """Модель таблицы UserData"""
-    user_id = ForeignKeyField(User, backref="profile", unique=True)
+    username = CharField(null=False)
+    first_name = CharField(null=True)
+    last_name = CharField(null=True)
+    middle_name = CharField(null=True)
+    user_id = ForeignKeyField(User, backref="profile", unique=True, null=False)
     phone_number = CharField(null=True)
-    avatar = BlobField(null=True)
+    avatar = CharField(null=True)
     notification = BooleanField(default=True)
 
 def init_db():

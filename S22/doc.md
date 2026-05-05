@@ -11,7 +11,6 @@
 | pair_number | Номер пары | Обязательно | integer | от 1 до 7 | - |
 | start_time | Время начала пары | Обязательно | time | формат HH:MM:SS | - |
 | end_time | Время окончания пары | Обязательно | time | формат HH:MM:SS, больше start_time | - |
-| duration_min | Длительность пары в минутах | Обязательно | integer | больше 0 | - |
 
 **Информация возвращаемая при успешном создании Timeslot**
 
@@ -21,7 +20,6 @@
 | pair_number | integer |
 | start_time | time |
 | end_time | time |
-| duration_min | integer |
 
 **Изменить Timeslot по ID**
 
@@ -32,7 +30,6 @@
 | pair_number | Номер пары | Не обязательно | integer | от 1 до 7 | - |
 | start_time | Время начала пары | Не обязательно | time | формат HH:MM:SS | - |
 | end_time | Время окончания пары | Не обязательно | time | формат HH:MM:SS, больше start_time | - |
-| duration_min | Длительность пары в минутах | Не обязательно | integer | больше 0 | - |
 
 **Информация возвращаемая при успешном изменении Timeslot**
 
@@ -42,7 +39,6 @@
 | pair_number | integer |
 | start_time | time |
 | end_time | time |
-| duration_min | integer |
 
 **Удалить Timeslot по ID**
 
@@ -58,7 +54,6 @@
 | pair_number | Номер пары | integer |
 | start_time | Время начала пары | time |
 | end_time | Время окончания пары | time |
-| duration_min | Длительность пары в минутах | integer |
 
 **Получить список Timeslot по заданным параметрам**
 
@@ -69,7 +64,6 @@
 | pair_number | Номер пары | integer | Равно указанному значению |
 | start_time | Время начала пары | time | Равно указанному времени |
 | end_time | Время окончания пары | time | Равно указанному времени |
-| duration_min | Длительность | integer | Равно указанному значению |
 
 **Информация возвращаемая в виде списка Timeslot**
 
@@ -79,7 +73,6 @@
 | pair_number | integer |
 | start_time | time |
 | end_time | time |
-| duration_min | integer |
 
 ---
 

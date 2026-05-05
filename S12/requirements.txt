@@ -1,0 +1,4 @@
+peewee
+fastapi
+uvicorn
+pydantic

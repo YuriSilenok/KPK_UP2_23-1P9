@@ -26,6 +26,7 @@ class UserData(Base):
     phone_number = CharField(null=True, unique=True)
     avatar = CharField(null=True)
     notification = BooleanField(default=True)
+    is_active = BooleanField(default=True)
 
 def init_db():
     """Подключение БД и создание таблиц"""

@@ -24,6 +24,7 @@
 | name | str |
 | fgos_id | int |
 | description | str |
+| is_active | bool |
 
 ## Изменить специальность по ID
 
@@ -45,6 +46,7 @@
 | name | str |
 | fgos_id | int |
 | description | str |
+| is_active | bool |
 
 
 ## Удалить специальность по ID
@@ -63,6 +65,7 @@
 | name | str |
 | fgos_id | int |
 | description | str |
+| is_active | bool |
 
 
 
@@ -75,6 +78,7 @@
 | name | str | Фильтр по части названия специальности |
 | fgos_id | int | Фильтр по ID стандарта ФГОС |
 | code | str | Фильтр по части кода специальности |
+| is_active | bool | Фильтр по активности |
 
 Информация, возвращаемая в виде списка специальностей:
 
@@ -85,6 +89,8 @@
 | name | str |
 | fgos_id | int |
 | description | str |
+| is_active | bool |
+
 
 ## Добавить ФГОС
 

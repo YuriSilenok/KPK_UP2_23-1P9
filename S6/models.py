@@ -5,6 +5,7 @@ from peewee import (
     CharField,
     IntegerField,
     TextField,
+    BooleanField,
     ForeignKeyField,
 )
 
@@ -36,6 +37,7 @@ class Specialty(BaseModel):
     name = CharField(max_length=255)
     description = TextField(max_length=100, default="")
     fgos = ForeignKeyField(FGOS, backref="specialties", on_delete="RESTRICT")
+    is_active = BooleanField(default=True)
 
     class Meta:
         table_name = "specialty"

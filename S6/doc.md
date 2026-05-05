@@ -161,3 +161,4 @@
 | approval_year | int |
 
 ## ER-диаграмма
+![Диаграмма](erd.png)

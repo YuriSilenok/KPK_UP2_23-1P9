@@ -11,18 +11,18 @@ class Base(Model):
 
 class User(Base):
     """Модель таблицы User"""
-    email = CharField(unique=True, null=False)
+    username = CharField(unique=True, null=Flase)
     password = CharField(null=False)
     is_active = BooleanField(default=True)
     created_at = DateField()
 
 class UserData(Base):
     """Модель таблицы UserData"""
-    username = CharField(null=False)
     first_name = CharField(null=True)
     last_name = CharField(null=True)
     middle_name = CharField(null=True)
     user_id = ForeignKeyField(User, backref="profile", unique=True, null=False, on_delete="CASCADE")
+    email = CharField(unique=True, null=False)
     phone_number = CharField(null=True, unique=True)
     avatar = CharField(null=True)
     notification = BooleanField(default=True)

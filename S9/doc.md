@@ -1,122 +1,120 @@
-# Документация сервиса движения студентов
+ Вариант №9. Сервис движения студентов (Student Movement Service)
 
-# Сущность: MovementRecord (Запись о движении)
+# Функции сервиса
 
-# 1. Информация для создания MovementRecord
+## Добавить запись о движении.
 
-| Parameter | Explanation | Required | Type | Constraint | Default |
-|-----------|-------------|----------|------|------------|---------|
-| student_id | ID студента | Yes | int | exists in Student, >0 | - |
-| group_from_id | ID группы откуда | Yes | int | exists in Group, >0 | - |
-| group_to_id | ID группы куда | Yes | int | exists in Group, >0 | - |
-| movement_type_id | ID типа движения | Yes | int | exists in MovementType, >0 | - |
-| movement_date | дата движения | Yes | date | YYYY-MM-DD, not future | - |
-| order_number | номер приказа | Yes | str | 1-50 chars | - |
-| reason | причина | Yes | str | 1-500 chars | - |
+| Параметр | Пояснение | Обязательно | Тип | Ограничение | Значение по умолчанию |
+|-----------|-----------|----------------|-----|-------------|----------------------|
+| student_id | ID студента (из Profile Service) | Обязательно | Целое число | >0 | — |
+| group_from_id | ID группы откуда (из Group Service) | Обязательно | Целое число | >0 | — |
+| group_to_id | ID группы куда (из Group Service) | Обязательно | Целое число | >0 | — |
+| movement_type_id | ID типа движения | Обязательно | Целое число | существует в MovementType, >0 | — |
+| movement_date | Дата движения | Обязательно | Дата | YYYY-MM-DD, не в будущем | — |
+| order_number | Номер приказа | Обязательно | Строка | 1-20 символов, формат: номер + буква (например: 45-у) | — |
+| reason | Причина | Обязательно | Строка | 1-100 символов | — |
 
-# 2. Уникальные комбинации параметров
+### Информация возвращаемая в случае удачного запроса.
 
-- (student_id, movement_date, movement_type_id)
+| Параметр | Тип |
+|-----------|-----|
+| id | Целое число |
+| student_id | Целое число |
+| group_from_id | Целое число |
+| group_to_id | Целое число |
+| movement_type_id | Целое число |
+| movement_date | Дата |
+| order_number | Строка |
+| reason | Строка |
 
-# 3. Информация возвращаемая при успешном создании
+## Изменить запись о движении по ID.
 
-| Parameter | Type |
-|-----------|------|
-| id | int |
-| student_id | int |
-| group_from_id | int |
-| group_to_id | int |
-| movement_type_id | int |
-| movement_date | date |
-| order_number | str |
-| reason | str |
+| Параметр | Пояснение | Обязательно | Тип | Ограничение | Значение по умолчанию |
+|-----------|-----------|----------------|-----|-------------|----------------------|
+| group_from_id | ID группы откуда | Необязательный | Целое число | >0 | не меняется |
+| group_to_id | ID группы куда | Необязательный | Целое число | >0 | не меняется |
+| movement_date | Дата движения | Необязательный | Дата | YYYY-MM-DD, не в будущем | не меняется |
+| order_number | Номер приказа | Необязательный | Строка | 1-20 символов, формат: номер + буква | не меняется |
+| reason | Причина | Необязательный | Строка | 1-100 символов | не меняется |
 
-# 4. Информация для изменения MovementRecord по ID
+### Информация возвращаемая в случае удачного запроса.
 
-| Parameter | Explanation | Required | Type | Constraint | Default |
-|-----------|-------------|----------|------|------------|---------|
-| group_from_id | ID группы откуда | No | int | exists in Group, >0 | unchanged |
-| group_to_id | ID группы куда | No | int | exists in Group, >0 | unchanged |
-| movement_date | дата движения | No | date | YYYY-MM-DD, not future | unchanged |
-| order_number | номер приказа | No | str | 1-50 chars | unchanged |
-| reason | причина | No | str | 1-500 chars | unchanged |
+| Параметр | Тип |
+|-----------|-----|
+| id | Целое число |
+| student_id | Целое число |
+| group_from_id | Целое число |
+| group_to_id | Целое число |
+| movement_type_id | Целое число |
+| movement_date | Дата |
+| order_number | Строка |
+| reason | Строка |
 
-# 5. Информация возвращаемая при успешном изменении
+## Удаление записи о движении по ID.
 
-| Parameter | Type |
-|-----------|------|
-| id | int |
-| student_id | int |
-| group_from_id | int |
-| group_to_id | int |
-| movement_type_id | int |
-| movement_date | date |
-| order_number | str |
-| reason | str |
+Полное удаление записи из базы данных.
 
-# 6. Удаление MovementRecord по ID
+### Информация возвращаемая в случае удачного запроса.
 
-Вернет True, если запись была удалена, иначе False
+Вернет `True`, если запись была удалена, иначе `False`
 
-# 7. Получение MovementRecord по ID
+## Получить запись о движении по ID.
 
-| Parameter | Explanation | Type |
-|-----------|-------------|------|
-| id | ID записи | int |
-| student_id | ID студента | int |
-| group_from_id | ID группы откуда | int |
-| group_to_id | ID группы куда | int |
-| movement_type_id | ID типа движения | int |
-| movement_date | дата движения | date |
-| order_number | номер приказа | str |
-| reason | причина | str |
+### Информация возвращаемая в случае удачного запроса.
 
-# 8. Параметры для получения списка MovementRecord
+| Параметр | Пояснение | Тип |
+|-----------|-----------|-----|
+| id | ID записи | Целое число |
+| student_id | ID студента | Целое число |
+| group_from_id | ID группы откуда | Целое число |
+| group_to_id | ID группы куда | Целое число |
+| movement_type_id | ID типа движения | Целое число |
+| movement_date | Дата движения | Дата |
+| order_number | Номер приказа | Строка |
+| reason | Причина | Строка |
 
-| Parameter | Explanation | Type | Description |
-|-----------|-------------|------|-------------|
-| student_id | ID студента | int | фильтр по студенту |
-| group_from_id | ID исходной группы | int | фильтр |
-| group_to_id | ID целевой группы | int | фильтр |
-| movement_type_id | ID типа движения | int | фильтр |
-| movement_date_from | дата движения от | date | >= |
-| movement_date_to | дата движения до | date | <= |
-| limit | лимит записей | int | по умолчанию 100 |
-| offset | смещение | int | по умолчанию 0 |
+### Получение списка записей о движении по параметрам.
 
-# 9. Информация возвращаемая при получении списка
+| Параметр | Тип | Условия фильтрации |
+|----------|-----|---------------------|
+| student_id | Целое число | равно указанному |
+| group_from_id | Целое число | равно указанному |
+| group_to_id | Целое число | равно указанному |
+| movement_type_id | Целое число | равно указанному |
+| movement_date_from | Дата | больше или равно указанному |
+| movement_date_to | Дата | меньше или равно указанному |
 
-| Parameter | Type |
-|-----------|------|
-| id | int |
-| student_id | int |
-| group_from_id | int |
-| group_to_id | int |
-| movement_type_id | int |
-| movement_date | date |
-| order_number | str |
-| reason | str |
+### Информация возвращаемая в случае удачного запроса.
 
-# Список функций
+| Параметр | Тип |
+|-----------|-----|
+| id | Целое число |
+| student_id | Целое число |
+| group_from_id | Целое число |
+| group_to_id | Целое число |
+| movement_type_id | Целое число |
+| movement_date | Дата |
+| order_number | Строка |
+| reason | Строка |
 
-1. init_db() - создание таблиц и заполнение справочников
-2. create_movement_record() - создание записи о движении
-3. get_movement_by_id() - получение записи по ID
-4. update_movement_record() - обновление записи
-5. delete_movement_record() - удаление записи по ID
-6. get_movements_list() - получение списка записей с фильтрацией
+---
 
-# Диаграмма классов
+## Уникальные комбинации параметров
 
-**Student**
-- id: int
-- full_name: str
+- `(student_id, movement_date, movement_type_id)` — один студент не может иметь два одинаковых типа движения в один день
 
-**Group**
-- id: int
-- name: str
-- course: int
-- faculty: str
+---
+
+## Список функций
+
+1. `init_db()` - создание таблиц и заполнение справочника типов движений
+2. `create_movement_record()` - создание записи о движении
+3. `get_movement_by_id()` - получение записи по ID
+4. `update_movement_record()` - обновление записи
+5. `delete_movement_record()` - удаление записи по ID
+6. `get_movements_list()` - получение списка записей с фильтрацией
+
+## Диаграмма классов
 
 **MovementType**
 - id: int
@@ -134,10 +132,10 @@
 - reason: str
 
 **Связи**
-- Student 1 ----< MovementRecord
-- Group 1 ----< MovementRecord
 - MovementType 1 ----< MovementRecord
 
-# ER-диаграмма
+---
 
-См. файл er_diagram.png
+ER-диаграмма
+
+![ER-диаграмма](erd.png)

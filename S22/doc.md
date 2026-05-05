@@ -241,3 +241,6 @@
 
 
 **ERD-диаграмма**
+
+
+![Screnshot](https://github.com/NikitaV2247/KPK_UP2_23-1P9/blob/patch-3/S22/ERD.png)

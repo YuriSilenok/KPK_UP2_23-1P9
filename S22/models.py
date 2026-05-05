@@ -1,4 +1,5 @@
 from peewee import *
+from datetime import date
 
 db = SqliteDatabase('S22.db')
 
@@ -19,26 +20,26 @@ class Timeslot(BaseModel):
         table_name = 'timeslot'
 
 
-class WeekdayTimeslot(BaseModel):
-    timeslot = ForeignKeyField(
-        Timeslot, 
-        backref='weekday_timeslots', 
-        on_delete='CASCADE',
-        on_update="CASCADE"
-    )
-    is_shortened = BooleanField(
-        default=False
-    )
-    is_holiday = BooleanField(
-        default=False
-    )
+class Holiday(BaseModel):
+    date = DateField(unique=True)
 
     class Meta:
-        table_name = 'weekday_timeslot'
+        table_name = 'holiday'
+
+class Short(BaseModel):
+    date = DateField()
+    pair_number = IntegerField(
+        constraints=[Check('pair_number BETWEEN 1 AND 7')],
+    )
+    start_time = TimeField()
+    end_time = TimeField(constraints=[Check('end_time > start_time')])
+
+    class Meta:
+        table_name = 'short'
 
 
 def create_tables():
-    db.create_tables([Timeslot, WeekdayTimeslot])
+    db.create_tables([Timeslot, Holiday, Short])
 
 
 if __name__ == '__main__':

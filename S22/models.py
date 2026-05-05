@@ -11,7 +11,10 @@ class BaseModel(Model):
 
 class Timeslot(BaseModel):
     week_day = IntegerField(constraints=[Check('week_day BETWEEN 1 AND 7')])
-    pair_number = IntegerField(constraints=[Check('pair_number BETWEEN 1 AND 7')])
+    pair_number = IntegerField(
+        primary_key=True,
+        constraints=[Check('pair_number BETWEEN 1 AND 7')]
+        )
     start_time = TimeField()
     end_time = TimeField(constraints=[Check('end_time > start_time')])
     
@@ -27,7 +30,10 @@ class Holiday(BaseModel):
 
 class Short(BaseModel):
     date = DateField()
-    pair_number = IntegerField(constraints=[Check('pair_number BETWEEN 1 AND 7')])
+    pair_number = IntegerField(
+        primary_key=True,
+        constraints=[Check('pair_number BETWEEN 1 AND 7')]
+        )
     start_time = TimeField()
     end_time = TimeField(constraints=[Check('end_time > start_time')])
 

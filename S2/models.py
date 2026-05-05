@@ -23,7 +23,7 @@ class UserData(Base):
     last_name = CharField(null=True)
     middle_name = CharField(null=True)
     user_id = ForeignKeyField(User, backref="profile", unique=True, null=False)
-    phone_number = CharField(null=True)
+    phone_number = CharField(null=True, unique=True)
     avatar = CharField(null=True)
     notification = BooleanField(default=True)
 

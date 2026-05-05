@@ -20,8 +20,8 @@ class FGOS(BaseModel):
     """Федеральный государственный образовательный стандарт."""
 
     id = AutoField()
-    number = CharField(max_length=50, unique=True)
-    name = CharField(max_length=255)
+    number = CharField(max_length=10, unique=True)
+    name = CharField(max_length=160)
     approval_year = IntegerField()
 
     class Meta:
@@ -32,9 +32,9 @@ class Specialty(BaseModel):
     """Специальность СПО."""
 
     id = AutoField()
-    code = CharField(max_length=20, unique=True)
+    code = CharField(max_length=8, unique=True)
     name = CharField(max_length=255)
-    description = TextField(default="")
+    description = TextField(max_length=100, default="")
     fgos = ForeignKeyField(FGOS, backref="specialties", on_delete="RESTRICT")
 
     class Meta:

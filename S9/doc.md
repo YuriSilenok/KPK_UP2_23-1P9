@@ -138,4 +138,4 @@
 
 ER-диаграмма
 
-![ER-диаграмма](erd.PNG?v=2)
+![ER-диаграмма](https://raw.githubusercontent.com/Snakered7736/KPK_UP2_23-1P9/main/S9/erd.PNG)

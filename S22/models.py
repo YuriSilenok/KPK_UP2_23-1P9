@@ -11,15 +11,15 @@ class BaseModel(Model):
 
 class Timeslot(BaseModel):
     week_day = IntegerField(constraints=[Check('week_day BETWEEN 1 AND 7')])
-    pair_number = IntegerField(
-        unique=True,
-        constraints=[Check('pair_number BETWEEN 1 AND 7')]
-        )
+    pair_number = IntegerField(constraints=[Check('pair_number BETWEEN 1 AND 7')])
     start_time = TimeField()
     end_time = TimeField(constraints=[Check('end_time > start_time')])
     
     class Meta:
         table_name = 'timeslot'
+        indexes = (
+            (('week_day', 'pair_number'), True)
+        )
 
 
 class Holiday(BaseModel):

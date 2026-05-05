@@ -17,6 +17,6 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           # юзеронеймы через пробел
-          reviewers=("YuriSilenok")
+          reviewers=("YuriSilenok" "Bormerd")
           random_reviewer=${reviewers[$RANDOM % ${#reviewers[@]}]}
           gh pr edit $PR_NUMBER --add-reviewer $random_reviewer --repo $REPO

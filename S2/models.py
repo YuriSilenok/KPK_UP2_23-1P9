@@ -11,7 +11,7 @@ class Base(Model):
 
 class User(Base):
     """Модель таблицы User"""
-    username = CharField(unique=True, null=Flase)
+    username = CharField(unique=True, null=False)
     password = CharField(null=False)
     is_active = BooleanField(default=True)
     created_at = DateField()

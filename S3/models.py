@@ -10,18 +10,18 @@ class Role(BaseModel):
     name = CharField(max_length=255, unique=True)
     description = CharField(max_length=255, null=True)
 
-class Permission(BaseModel):
-    resource = CharField(max_length=100)
+class Access(BaseModel):
+    object = CharField(max_length=100)
     action = CharField(max_length=50)
 
     class Meta:
         indexes = (
-            (('resource', 'action'), True),
+            (('object', 'action'), True),
         )
 
-class RolePermission(BaseModel):
+class Permission(BaseModel):
     role = ForeignKeyField(Role, backref='permissions', on_delete='CASCADE')
-    permission = ForeignKeyField(Permission, backref='roles', on_delete='CASCADE')
+    permission = ForeignKeyField(Access, backref='roles', on_delete='CASCADE')
 
     class Meta:
         indexes = (
@@ -30,7 +30,7 @@ class RolePermission(BaseModel):
 
 def init_db():
     database.connect()
-    database.create_tables([Role, Permission, RolePermission], safe=True)
+    database.create_tables([Role, Access, Permission], safe=True)
     for name in ["Admin", "Director", "HeadTeacher", "Teacher", "Student", "Parent"]:
         Role.get_or_create(name=name, defaults={"description": f"Role {name}"})
     database.close()

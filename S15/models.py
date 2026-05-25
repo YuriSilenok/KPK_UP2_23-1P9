@@ -1,61 +1,48 @@
-import os
 from peewee import *
-from datetime import date, datetime
+import datetime
 
-db = SqliteDatabase('student_movement.db')
+db = SqliteDatabase('load_assignment.db')
 
-
-class Student(Model):
-    """Модель студента"""
-    id = IntegerField(primary_key=True)
-    full_name = CharField(max_length=200)
-    group_id = IntegerField()
-    is_active = BooleanField(default=True)
-
+class BaseModel(Model):
     class Meta:
         database = db
-        table_name = 'students'
 
+class Teacher(BaseModel):
+    external_id = CharField(unique=True, max_length=100, null=False)
 
-class Group(Model):
-    """Модель учебной группы"""
-    id = IntegerField(primary_key=True)
-    name = CharField(max_length=100)
-    year_of_entry = IntegerField()
-    is_active = BooleanField(default=True)
+class Discipline(BaseModel):
+    external_id = CharField(unique=True, max_length=100, null=False)
+    name = CharField(max_length=255, null=False)
 
-    class Meta:
-        database = db
-        table_name = 'groups'
+class Group(BaseModel):
+    external_id = CharField(unique=True, max_length=100, null=False)
+    name = CharField(max_length=100, null=False)
 
-
-class Movement(Model):
-    """Модель движения студента"""
-    id = AutoField()
-    student_id = IntegerField()
-    movement_type = CharField(max_length=20)
-    start_date = DateField()
-    source_group_id = IntegerField(null=True)
-    target_group_id = IntegerField(null=True)
-    reason = CharField(max_length=255, null=True)
-    order_number = CharField(max_length=50, null=True)
-    end_date = DateField(null=True)
-    created_at = DateTimeField(default=datetime.now)
-    is_active = BooleanField(default=True)
+class TeacherDiscipline(BaseModel):
+    teacher = ForeignKeyField(Teacher, backref='disciplines_link', null=False, on_delete='CASCADE')
+    discipline = ForeignKeyField(Discipline, backref='teachers_link', null=False, on_delete='CASCADE')
 
     class Meta:
-        database = db
-        table_name = 'movements'
+        primary_key = CompositeKey('teacher', 'discipline')
 
+class Assignment(BaseModel):
+    teacher = ForeignKeyField(Teacher, backref='assignments', null=False, on_delete='CASCADE')
+    discipline = ForeignKeyField(Discipline, backref='assignments', null=False, on_delete='CASCADE')
+    group = ForeignKeyField(Group, backref='assignments', null=False, on_delete='CASCADE')
+    semester = CharField(max_length=20, null=False)
+    hours = IntegerField(null=False)
+
+    class Meta:
+        indexes = (
+            (('teacher', 'discipline', 'group', 'semester'), True),
+        )
 
 def init_db():
     db.connect()
-    db.create_tables([Student, Group, Movement], safe=True)
+    db.execute_sql('PRAGMA foreign_keys = ON;')
+    db.create_tables([Teacher, Discipline, Group, TeacherDiscipline, Assignment], safe=True)
+    db.close()
 
-
-def main():
+if __name__ == '__main__':
     init_db()
-
-
-if __name__ == "__main__":
-    main()
+    print("DB initialized for Load Assignment Service (Вариант 15)")

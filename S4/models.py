@@ -4,8 +4,9 @@ db = SqliteDatabase('permissions.db')
 
 
 class Permission(Model):
+    id = AutoField(primary_key=True, null=False)
     name = CharField(max_length=100, unique=True, null=False)
-    description = CharField(max_length=255, null=True)
+    description = CharField(max_length=255, null=False, default='')
     is_active = BooleanField(null=False, default=True)
 
     class Meta:
@@ -14,6 +15,7 @@ class Permission(Model):
 
 
 class RolePermission(Model):
+    id = AutoField(primary_key=True, null=False)
     role_id = IntegerField(null=False)
     permission_id = ForeignKeyField(Permission, backref='role_permissions', null=False)
 

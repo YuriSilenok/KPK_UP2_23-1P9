@@ -1,20 +1,18 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query, Path
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from peewee import IntegrityError, fn
 from models import db, Permission, RolePermission, init_db
 
-
+# Схемы Pydantic
 class PermissionCreate(BaseModel):
-    name: str = Field(..., max_length=100, description="Название разрешения")
-    description: Optional[str] = Field('', max_length=255, description="Описание")
-
+    name: str = Field(..., max_length=100)
+    description: Optional[str] = Field('', max_length=255)
 
 class PermissionUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=100, description="Название разрешения")
-    description: Optional[str] = Field(None, max_length=255, description="Описание")
-
+    name: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=255)
 
 class PermissionOut(BaseModel):
     id: int
@@ -22,260 +20,119 @@ class PermissionOut(BaseModel):
     description: str
     is_active: bool
 
+    class Config:
+        from_attributes = True
 
 class RolePermissionCreate(BaseModel):
-    role_id: int = Field(..., description="ID роли (из Role Service)")
-    permission_id: int = Field(..., description="ID разрешения")
-
+    role_id: int
+    permission_id: int
 
 class RolePermissionOut(BaseModel):
     id: int
     role_id: int
     permission_id: int
 
-
 class DeleteResponse(BaseModel):
     deleted: bool
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Запуск Permission Service...")
     init_db()
-    print("База данных инициализирована")
     yield
-    print("Остановка сервера...")
     if not db.is_closed():
         db.close()
 
-
-app = FastAPI(
-    title="Permission Service",
-    description="Сервис управления разрешениями",
-    version="1.0",
-    lifespan=lifespan
-)
-
+app = FastAPI(title="Permission Service", lifespan=lifespan)
 
 @app.post("/permissions", response_model=PermissionOut, status_code=201)
 def create_permission(perm: PermissionCreate):
-    db.connect()
     try:
-        existing = Permission.get_or_none(Permission.name == perm.name)
-        if existing:
-            raise HTTPException(400, "Разрешение с таким названием уже существует")
-
         with db.atomic():
-            new_perm = Permission.create(
+            return Permission.create(
                 name=perm.name,
-                description=perm.description or ''
+                description=perm.description
             )
-            return new_perm
-    finally:
-        db.close()
-
+    except IntegrityError:
+        raise HTTPException(400, "Разрешение с таким названием уже существует")
 
 @app.get("/permissions/{perm_id}", response_model=PermissionOut)
 def get_permission(perm_id: int):
-    db.connect()
-    try:
-        perm = Permission.get_or_none(Permission.id == perm_id)
-        if perm is None:
-            raise HTTPException(404, "Разрешение не найдено")
-        return perm
-    finally:
-        db.close()
-
+    perm = Permission.get_or_none(Permission.id == perm_id)
+    if not perm:
+        raise HTTPException(404, "Разрешение не найдено")
+    return perm
 
 @app.get("/permissions", response_model=List[PermissionOut])
 def list_permissions(
-    name: Optional[str] = Query(None, description="Фильтр по названию (частичное совпадение, регистронезависимо)"),
-    is_active: Optional[bool] = Query(None, description="Фильтр по активности"),
-    limit: int = Query(100, ge=1, description="Лимит записей"),
-    offset: int = Query(0, ge=0, description="Смещение для пагинации")
+    name: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    limit: int = Query(100, ge=1),
+    offset: int = Query(0, ge=0)
 ):
-    db.connect()
-    try:
-        query = Permission.select()
-        if name:
-            query = query.where(fn.LOWER(Permission.name).contains(name.lower()))
-        if is_active is not None:
-            query = query.where(Permission.is_active == is_active)
-
-        permissions = list(query.offset(offset).limit(limit))
-        return permissions
-    finally:
-        db.close()
-
+    query = Permission.select()
+    if name:
+        query = query.where(fn.LOWER(Permission.name).contains(name.lower()))
+    if is_active is not None:
+        query = query.where(Permission.is_active == is_active)
+    return list(query.offset(offset).limit(limit))
 
 @app.put("/permissions/{perm_id}", response_model=PermissionOut)
 def update_permission(perm_id: int, perm: PermissionUpdate):
-    db.connect()
+    existing = Permission.get_or_none(Permission.id == perm_id)
+    if not existing:
+        raise HTTPException(404, "Разрешение не найдено")
+
+    update_data = {k: v for k, v in perm.model_dump().items() if v is not None}
+    if not update_data:
+        return existing
+
     try:
-        existing = Permission.get_or_none(Permission.id == perm_id)
-        if existing is None:
-            raise HTTPException(404, "Разрешение не найдено")
-
-        update_data = {}
-        if perm.name is not None:
-            name_exists = Permission.get_or_none(
-                (Permission.name == perm.name) & (Permission.id != perm_id)
-            )
-            if name_exists:
-                raise HTTPException(400, "Разрешение с таким названием уже существует")
-            update_data['name'] = perm.name
-        if perm.description is not None:
-            update_data['description'] = perm.description
-
-        if update_data:
-            with db.atomic():
-                Permission.update(update_data).where(Permission.id == perm_id).execute()
-
-        updated = Permission.get_by_id(perm_id)
-        return updated
-    finally:
-        db.close()
-
+        with db.atomic():
+            Permission.update(update_data).where(Permission.id == perm_id).execute()
+        return Permission.get_by_id(perm_id)
+    except IntegrityError:
+        raise HTTPException(400, "Название уже занято другим разрешением")
 
 @app.delete("/permissions/{perm_id}", response_model=DeleteResponse)
 def delete_permission(perm_id: int):
-    db.connect()
-    try:
-        existing = Permission.get_or_none(Permission.id == perm_id)
-        if existing is None:
-            return DeleteResponse(deleted=False)
+    updated = Permission.update(is_active=False).where(Permission.id == perm_id).execute()
+    return DeleteResponse(deleted=bool(updated))
 
-        with db.atomic():
-            existing.is_active = False
-            existing.save()
-        return DeleteResponse(deleted=True)
-    finally:
-        db.close()
-
-
-# ==================== Эндпоинты для RolePermission ====================
 @app.post("/role-permissions", response_model=RolePermissionOut, status_code=201)
 def create_role_permission(rp: RolePermissionCreate):
-    db.connect()
+    # Проверка активности (согласно обновленной доке)
+    perm = Permission.get_or_none((Permission.id == rp.permission_id) & (Permission.is_active == True))
+    if not perm:
+        raise HTTPException(400, "Разрешение не найдено или неактивно")
+    
     try:
-        # Проверяем существование и активность разрешения
-        permission = Permission.get_or_none(
-            (Permission.id == rp.permission_id) & (Permission.is_active == True)
-        )
-        if permission is None:
-            raise HTTPException(404, f"Активное разрешение с id={rp.permission_id} не найдено")
-
-        # Явная проверка существования связи
-        existing = RolePermission.get_or_none(
-            (RolePermission.role_id == rp.role_id) &
-            (RolePermission.permission_id == rp.permission_id)
-        )
-        if existing:
-            raise HTTPException(400, "Связь между этой ролью и разрешением уже существует")
-
         with db.atomic():
-            new_rp = RolePermission.create(
-                role_id=rp.role_id,
-                permission_id=rp.permission_id
-            )
-            return new_rp
-    finally:
-        db.close()
-
-
-@app.get("/role-permissions/{rp_id}", response_model=RolePermissionOut)
-def get_role_permission(rp_id: int):
-    db.connect()
-    try:
-        rp = RolePermission.get_or_none(RolePermission.id == rp_id)
-        if rp is None:
-            raise HTTPException(404, "Связь не найдена")
-        return rp
-    finally:
-        db.close()
-
-
-@app.delete("/role-permissions/{rp_id}", response_model=DeleteResponse)
-def delete_role_permission_by_id(rp_id: int):
-    db.connect()
-    try:
-        existing = RolePermission.get_or_none(RolePermission.id == rp_id)
-        if existing is None:
-            return DeleteResponse(deleted=False)
-
-        with db.atomic():
-            RolePermission.delete().where(RolePermission.id == rp_id).execute()
-        return DeleteResponse(deleted=True)
-    finally:
-        db.close()
-
-
-@app.delete("/role-permissions", response_model=DeleteResponse)
-def delete_role_permission_by_params(
-    role_id: int = Query(..., description="ID роли"),
-    permission_id: int = Query(..., description="ID разрешения")
-):
-    db.connect()
-    try:
-        existing = RolePermission.get_or_none(
-            (RolePermission.role_id == role_id) &
-            (RolePermission.permission_id == permission_id)
-        )
-        if existing is None:
-            return DeleteResponse(deleted=False)
-
-        with db.atomic():
-            RolePermission.delete().where(
-                (RolePermission.role_id == role_id) &
-                (RolePermission.permission_id == permission_id)
-            ).execute()
-        return DeleteResponse(deleted=True)
-    finally:
-        db.close()
-
+            return RolePermission.create(role_id=rp.role_id, permission_id=rp.permission_id)
+    except IntegrityError:
+        raise HTTPException(400, "Такая связь уже существует")
 
 @app.get("/role-permissions/by-role/{role_id}", response_model=List[PermissionOut])
 def get_permissions_by_role(role_id: int):
-    db.connect()
-    try:
-        permissions = list(
-            Permission
-            .select()
-            .join(RolePermission, on=(Permission.id == RolePermission.permission_id))
-            .where(
-                (RolePermission.role_id == role_id) &
-                (Permission.is_active == True)
-            )
-        )
-        return permissions
-    finally:
-        db.close()
+    return list(
+        Permission.select()
+        .join(RolePermission)
+        .where((RolePermission.role_id == role_id) & (Permission.is_active == True))
+    )
 
+@app.delete("/role-permissions", response_model=DeleteResponse)
+def delete_role_permission_by_params(role_id: int = Query(...), permission_id: int = Query(...)):
+    deleted = RolePermission.delete().where(
+        (RolePermission.role_id == role_id) & (RolePermission.permission_id == permission_id)
+    ).execute()
+    return DeleteResponse(deleted=bool(deleted))
 
-@app.get("/")
-def root():
-    return {
-        "service": "Permission Service",
-        "version": "1.0",
-        "endpoints": {
-            "POST /permissions": "Создать разрешение",
-            "GET /permissions/{id}": "Получить разрешение по ID",
-            "GET /permissions": "Список разрешений с фильтрацией",
-            "PUT /permissions/{id}": "Обновить разрешение",
-            "DELETE /permissions/{id}": "Удалить разрешение (soft delete)",
-            "POST /role-permissions": "Назначить разрешение роли",
-            "GET /role-permissions/{id}": "Получить связь по ID",
-            "DELETE /role-permissions/{id}": "Удалить связь по ID",
-            "DELETE /role-permissions": "Удалить связь по параметрам",
-            "GET /role-permissions/by-role/{role_id}": "Получить разрешения для роли"
-        }
-    }
+@app.delete("/role-permissions/{rp_id}", response_model=DeleteResponse)
+def delete_link_by_id(rp_id: int):
+    deleted = RolePermission.delete().where(RolePermission.id == rp_id).execute()
+    return DeleteResponse(deleted=bool(deleted))
 
-
-if __name__ == "__main__":
-    import uvicorn
-    print("=" * 50)
-    print("Запуск Permission Service...")
-    print("Документация API: http://localhost:8000/docs")
-    print("=" * 50)
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+@app.get("/role-permissions/{rp_id}", response_model=RolePermissionOut)
+def get_role_permission(rp_id: int):
+    rp = RolePermission.get_or_none(RolePermission.id == rp_id)
+    if not rp: raise HTTPException(404, "Связь не найдена")
+    return rp

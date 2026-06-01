@@ -5,7 +5,7 @@ db = SqliteDatabase('permissions.db')
 
 class Permission(Model):
     name = CharField(max_length=100, unique=True, null=False)
-    description = CharField(max_length=255, null=True, default='')
+    description = CharField(max_length=255, null=True)
     is_active = BooleanField(null=False, default=True)
 
     class Meta:

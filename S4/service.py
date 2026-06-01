@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
+from peewee import IntegrityError
 from models import db, Permission, RolePermission, init_db
 
 
@@ -55,19 +56,18 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-
 @app.post("/permissions", response_model=PermissionOut, status_code=201)
 def create_permission(perm: PermissionCreate):
     db.connect()
     try:
-        if Permission.select().where(Permission.name == perm.name).exists():
-            raise HTTPException(400, "Разрешение с таким названием уже существует")
-
-        new_perm = Permission.create(
-            name=perm.name,
-            description=perm.description or ''
-        )
-        return new_perm
+        with db.atomic():
+            new_perm = Permission.create(
+                name=perm.name,
+                description=perm.description or ''
+            )
+            return new_perm
+    except IntegrityError:
+        raise HTTPException(400, "Разрешение с таким названием уже существует")
     finally:
         db.close()
 
@@ -88,7 +88,7 @@ def get_permission(perm_id: int):
 def list_permissions(
     name: Optional[str] = Query(None, description="Фильтр по названию (частичное совпадение)"),
     is_active: Optional[bool] = Query(None, description="Фильтр по активности"),
-    limit: int = Query(100, ge=1, le=500, description="Лимит записей"),
+    limit: int = Query(100, ge=1, description="Лимит записей"),
     offset: int = Query(0, ge=0, description="Смещение для пагинации")
 ):
     db.connect()
@@ -115,16 +115,16 @@ def update_permission(perm_id: int, perm: PermissionUpdate):
 
         update_data = {}
         if perm.name is not None:
-            if Permission.select().where(
-                (Permission.name == perm.name) & (Permission.id != perm_id)
-            ).exists():
-                raise HTTPException(400, "Разрешение с таким названием уже существует")
             update_data['name'] = perm.name
         if perm.description is not None:
             update_data['description'] = perm.description
 
         if update_data:
-            Permission.update(update_data).where(Permission.id == perm_id).execute()
+            try:
+                with db.atomic():
+                    Permission.update(update_data).where(Permission.id == perm_id).execute()
+            except IntegrityError:
+                raise HTTPException(400, "Разрешение с таким названием уже существует")
 
         updated = Permission.get_by_id(perm_id)
         return updated
@@ -132,40 +132,45 @@ def update_permission(perm_id: int, perm: PermissionUpdate):
         db.close()
 
 
-@app.delete("/permissions/{perm_id}", response_model=PermissionOut)
+@app.delete("/permissions/{perm_id}", response_model=DeleteResponse)
 def delete_permission(perm_id: int):
     db.connect()
     try:
         existing = Permission.get_or_none(Permission.id == perm_id)
         if existing is None:
-            raise HTTPException(404, "Разрешение не найдено")
+            return DeleteResponse(deleted=False)
 
         existing.is_active = False
         existing.save()
-        return existing
+        return DeleteResponse(deleted=True)
     finally:
         db.close()
 
 
 @app.post("/role-permissions", response_model=RolePermissionOut, status_code=201)
 def create_role_permission(rp: RolePermissionCreate):
+    """Назначить разрешение роли"""
     db.connect()
     try:
-        permission = Permission.get_or_none(Permission.id == rp.permission_id)
+        permission = Permission.get_or_none(
+            (Permission.id == rp.permission_id) & (Permission.is_active == True)
+        )
         if permission is None:
-            raise HTTPException(404, f"Разрешение с id={rp.permission_id} не найдено")
+            raise HTTPException(404, f"Активное разрешение с id={rp.permission_id} не найдено")
 
-        if RolePermission.select().where(
+        existing = RolePermission.get_or_none(
             (RolePermission.role_id == rp.role_id) &
             (RolePermission.permission_id == rp.permission_id)
-        ).exists():
+        )
+        if existing:
             raise HTTPException(400, "Связь между этой ролью и разрешением уже существует")
 
-        new_rp = RolePermission.create(
-            role_id=rp.role_id,
-            permission_id=rp.permission_id
-        )
-        return new_rp
+        with db.atomic():
+            new_rp = RolePermission.create(
+                role_id=rp.role_id,
+                permission_id=rp.permission_id
+            )
+            return new_rp
     finally:
         db.close()
 
@@ -177,11 +182,19 @@ def delete_role_permission(
 ):
     db.connect()
     try:
-        deleted = RolePermission.delete().where(
+        existing = RolePermission.get_or_none(
             (RolePermission.role_id == role_id) &
             (RolePermission.permission_id == permission_id)
-        ).execute()
-        return DeleteResponse(deleted=bool(deleted))
+        )
+        if existing is None:
+            return DeleteResponse(deleted=False)
+
+        with db.atomic():
+            RolePermission.delete().where(
+                (RolePermission.role_id == role_id) &
+                (RolePermission.permission_id == permission_id)
+            ).execute()
+            return DeleteResponse(deleted=True)
     finally:
         db.close()
 
@@ -190,13 +203,14 @@ def delete_role_permission(
 def get_permissions_by_role(role_id: int):
     db.connect()
     try:
-        rp_list = RolePermission.select().where(RolePermission.role_id == role_id)
-        permission_ids = [rp.permission_id for rp in rp_list]
-
-        if not permission_ids:
-            return []
-
-        permissions = list(Permission.select().where(Permission.id.in_(permission_ids)))
+        query = (Permission
+                 .select()
+                 .join(RolePermission, on=RolePermission.permission_id == Permission.id)
+                 .where(
+                     (RolePermission.role_id == role_id) &
+                     (Permission.is_active == True)
+                 ))
+        permissions = list(query)
         return permissions
     finally:
         db.close()
@@ -215,7 +229,7 @@ def root():
             "DELETE /permissions/{id}": "Удалить разрешение (soft delete)",
             "POST /role-permissions": "Назначить разрешение роли",
             "DELETE /role-permissions": "Отозвать разрешение у роли",
-            "GET /role-permissions/{role_id}": "Получить все разрешения для роли"
+            "GET /role-permissions/{role_id}": "Получить разрешения для роли"
         }
     }
 

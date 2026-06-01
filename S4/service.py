@@ -22,6 +22,17 @@ class PermissionOut(BaseModel):
     is_active: bool
 
 
+class RolePermissionCreate(BaseModel):
+    role_id: int = Field(..., description="ID роли (из Role Service)")
+    permission_id: int = Field(..., description="ID разрешения")
+
+
+class RolePermissionOut(BaseModel):
+    id: int
+    role_id: int
+    permission_id: int
+
+
 class DeleteResponse(BaseModel):
     deleted: bool
 
@@ -75,10 +86,10 @@ def get_permission(perm_id: int):
 
 @app.get("/permissions", response_model=List[PermissionOut])
 def list_permissions(
-    name: Optional[str] = Query(None, description="Фильтр по названию"),
+    name: Optional[str] = Query(None, description="Фильтр по названию (частичное совпадение)"),
     is_active: Optional[bool] = Query(None, description="Фильтр по активности"),
     limit: int = Query(100, ge=1, le=500, description="Лимит записей"),
-    offset: int = Query(0, ge=0, description="Смещение")
+    offset: int = Query(0, ge=0, description="Смещение для пагинации")
 ):
     db.connect()
     try:
@@ -131,8 +142,62 @@ def delete_permission(perm_id: int):
 
         existing.is_active = False
         existing.save()
-        
         return existing
+    finally:
+        db.close()
+
+
+@app.post("/role-permissions", response_model=RolePermissionOut, status_code=201)
+def create_role_permission(rp: RolePermissionCreate):
+    db.connect()
+    try:
+        permission = Permission.get_or_none(Permission.id == rp.permission_id)
+        if permission is None:
+            raise HTTPException(404, f"Разрешение с id={rp.permission_id} не найдено")
+
+        if RolePermission.select().where(
+            (RolePermission.role_id == rp.role_id) &
+            (RolePermission.permission_id == rp.permission_id)
+        ).exists():
+            raise HTTPException(400, "Связь между этой ролью и разрешением уже существует")
+
+        new_rp = RolePermission.create(
+            role_id=rp.role_id,
+            permission_id=rp.permission_id
+        )
+        return new_rp
+    finally:
+        db.close()
+
+
+@app.delete("/role-permissions", response_model=DeleteResponse)
+def delete_role_permission(
+    role_id: int = Query(..., description="ID роли"),
+    permission_id: int = Query(..., description="ID разрешения")
+):
+    db.connect()
+    try:
+        deleted = RolePermission.delete().where(
+            (RolePermission.role_id == role_id) &
+            (RolePermission.permission_id == permission_id)
+        ).execute()
+        return DeleteResponse(deleted=bool(deleted))
+    finally:
+        db.close()
+
+
+@app.get("/role-permissions/{role_id}", response_model=List[PermissionOut])
+def get_permissions_by_role(role_id: int):
+    db.connect()
+    try:
+        rp_list = RolePermission.select().where(RolePermission.role_id == role_id)
+        permission_ids = [rp.permission_id for rp in rp_list]
+
+        if not permission_ids:
+            return []
+
+        permissions = list(Permission.select().where(Permission.id.in_(permission_ids)))
+        return permissions
     finally:
         db.close()
 
@@ -144,10 +209,13 @@ def root():
         "version": "1.0",
         "endpoints": {
             "POST /permissions": "Создать разрешение",
-            "GET /permissions/{id}": "Получить по ID",
-            "GET /permissions": "Список с фильтрацией",
-            "PUT /permissions/{id}": "Обновить",
-            "DELETE /permissions/{id}": "Удалить (soft delete)"
+            "GET /permissions/{id}": "Получить разрешение по ID",
+            "GET /permissions": "Список разрешений с фильтрацией",
+            "PUT /permissions/{id}": "Обновить разрешение",
+            "DELETE /permissions/{id}": "Удалить разрешение (soft delete)",
+            "POST /role-permissions": "Назначить разрешение роли",
+            "DELETE /role-permissions": "Отозвать разрешение у роли",
+            "GET /role-permissions/{role_id}": "Получить все разрешения для роли"
         }
     }
 

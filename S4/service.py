@@ -2,7 +2,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from peewee import SqliteDatabase, Model, CharField, BooleanField, AutoField
 from models import db, Permission, RolePermission, init_db
 
 
@@ -122,16 +121,18 @@ def update_permission(perm_id: int, perm: PermissionUpdate):
         db.close()
 
 
-@app.delete("/permissions/{perm_id}", response_model=DeleteResponse)
+@app.delete("/permissions/{perm_id}", response_model=PermissionOut)
 def delete_permission(perm_id: int):
     db.connect()
     try:
         existing = Permission.get_or_none(Permission.id == perm_id)
         if existing is None:
-            return DeleteResponse(deleted=False)
+            raise HTTPException(404, "Разрешение не найдено")
 
-        Permission.update(is_active=False).where(Permission.id == perm_id).execute()
-        return DeleteResponse(deleted=True)
+        existing.is_active = False
+        existing.save()
+        
+        return existing
     finally:
         db.close()
 

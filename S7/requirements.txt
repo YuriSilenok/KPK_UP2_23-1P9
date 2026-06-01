@@ -1,2 +1,5 @@
 peewee
-playhouse
+fastapi
+pydantic
+typing
+re

@@ -1,12 +1,7 @@
 from peewee import *
-from playhouse import validate_range, validate_regexp, validate_one_of, validate_length
-
+import re
 db = SqliteDatabase('data.db')
 
-def validate_positive_or_none(value):
-    if value is not None and value <= 0:
-        raise ValueError("Значение должно быть положительным или None")
-    
 class BaseModel(Model):
     class Meta:
         database = db
@@ -16,20 +11,38 @@ class Groups(BaseModel):
         db_table = "groups"
     
     id = AutoField()
-    year = IntegerField(null=False,validators=[validate_range(2000, 2999)])
+    year = IntegerField(null=False)
     is_active = BooleanField(default=True) 
-    tutor_id = IntegerField(null=True, default=None, validators=[validate_positive_or_none]) 
-    student_count = IntegerField(default=0, validators=[validate_range(0, 30)])
-    cipher_of_the_training_area = CharField(null=False,max_length=8,
-        validators=[validate_regexp(r'^\d{2}\.\d{2}\.\d{2}$')]
-    )
-    number = IntegerField(null=False,validators = validate_range(1, 9999))
-    after_class_number = IntegerField(null=False,
-        validators=[validate_one_of([9, 11])]
-    )
-    prefix = CharField(null=False,
-        validators=[validate_length(1, 2)]
-    )
+    tutor_id = IntegerField(null=True, default=None)
+    student_count = IntegerField(default=0)
+    cipher_of_the_training_area = CharField(null=False, max_length=8)
+    number = IntegerField(null=False)
+    after_class_number = IntegerField(null=False)
+    prefix = CharField(null=False)
+
+    def validate(self):
+
+        if self.year is not None and not (2000 <= self.year <= 2999):
+            raise ValueError("Год должен быть в диапазоне от 2000 до 2999")
+
+        if self.tutor_id is not None and self.tutor_id <= 0:
+            raise ValueError("ID преподавателя должно быть положительным числом или None")
+
+        if self.student_count is not None and not (0 <= self.student_count <= 30):
+            raise ValueError("Количество студентов должно быть от 0 до 30")
+
+        if self.cipher_of_the_training_area:
+            if not re.match(r'^\d{2}\.\d{2}\.\d{2}$', self.cipher_of_the_training_area):
+                raise ValueError("Шифр должен быть в формате XX.XX.XX")
+
+        if self.number is not None and not (1 <= self.number <= 9999):
+            raise ValueError("Номер группы должен быть от 1 до 9999")
+
+        if self.after_class_number is not None and self.after_class_number not in [9, 11]:
+            raise ValueError("Количество классов после обучения должно быть 9 или 11")
+
+        if self.prefix and not (1 <= len(self.prefix) <= 2):
+            raise ValueError("Префикс должен содержать 1 или 2 символа")
 
 def init_db():
     db.connect()

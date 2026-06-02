@@ -1,5 +1,6 @@
 from peewee import *
 import re
+
 db = SqliteDatabase('data.db')
 
 class BaseModel(Model):
@@ -9,19 +10,21 @@ class BaseModel(Model):
 class Groups(BaseModel):
     class Meta:
         db_table = "groups"
+        indexes = (
+            (('number', 'after_class_number', 'prefix'), True),
+        )
     
     id = AutoField()
     year = IntegerField(null=False)
     is_active = BooleanField(default=True) 
     tutor_id = IntegerField(null=True, default=None)
-    student_count = IntegerField(none=False,default=0)
+    student_count = IntegerField(null=False, default=0)
     cipher_of_the_training_area = CharField(null=False, max_length=8)
     number = IntegerField(null=False)
     after_class_number = IntegerField(null=False)
-    prefix = CharField(max_length=2,null=False)
+    prefix = CharField(max_length=2, null=False)
 
     def validate(self):
-
         required_fields = {
             'year': self.year,
             'cipher_of_the_training_area': self.cipher_of_the_training_area,
@@ -45,11 +48,11 @@ class Groups(BaseModel):
             if self.tutor_id <= 0:
                 raise ValueError("ID преподавателя должно быть положительным числом")
 
-        if self.student_count: 
-            if not isinstance(self.student_count, int):
-                raise ValueError("Количество студентов должно быть целым числом")
-            if not (0 <= self.student_count <= 30):
-                raise ValueError("Количество студентов должно быть от 0 до 30")
+        # Исправлено: убрана проверка на None, т.к. поле не может быть null
+        if not isinstance(self.student_count, int):
+            raise ValueError("Количество студентов должно быть целым числом")
+        if not (0 <= self.student_count <= 30):
+            raise ValueError("Количество студентов должно быть от 0 до 30")
 
         if not isinstance(self.cipher_of_the_training_area, str):
             raise ValueError("Шифр должен быть строкой")
@@ -69,6 +72,11 @@ class Groups(BaseModel):
         if not (1 <= len(self.prefix) <= 2):
             raise ValueError("Префикс должен содержать 1 или 2 символа")
         
+        return True
+
+    def soft_delete(self):
+        self.is_active = False
+        self.save()
         return True
 
 def init_db():

@@ -3,7 +3,10 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from peewee import IntegrityError, fn
+import httpx
 from models import db, Permission, RolePermission, init_db
+
+ROLE_SERVICE_URL = "http://localhost:8001" 
 
 class PermissionCreate(BaseModel):
     name: str = Field(..., max_length=100)
@@ -40,6 +43,10 @@ class DeleteResponse(BaseModel):
     deleted: bool
 
 
+class ErrorResponse(BaseModel):
+    detail: str
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -60,7 +67,7 @@ def create_permission(perm: PermissionCreate):
                 description=perm.description
             )
     except IntegrityError:
-        raise HTTPException(400, "Разрешение с таким названием уже существует")
+        raise HTTPException(400, "Разрешение с таким названием уже существует. Название должно быть уникальным.")
 
 
 @app.get("/permissions/{perm_id}", response_model=PermissionOut)
@@ -75,7 +82,7 @@ def get_permission(perm_id: int):
 def list_permissions(
     name: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
-    limit: int = Query(100, ge=1),
+    limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
     query = Permission.select()
@@ -101,7 +108,7 @@ def update_permission(perm_id: int, perm: PermissionUpdate):
             Permission.update(update_data).where(Permission.id == perm_id).execute()
         return Permission.get_by_id(perm_id)
     except IntegrityError:
-        raise HTTPException(400, "Название уже занято другим разрешением")
+        raise HTTPException(400, "Название уже занято другим разрешением. Название должно быть уникальным.")
 
 
 @app.delete("/permissions/{perm_id}", response_model=DeleteResponse)
@@ -110,12 +117,18 @@ def delete_permission(perm_id: int):
     return DeleteResponse(deleted=bool(updated))
 
 
-
 @app.post("/role-permissions", response_model=RolePermissionOut, status_code=201)
 def create_role_permission(rp: RolePermissionCreate):
-    perm = Permission.get_or_none(Permission.id == rp.permission_id)
-    if not perm:
-        raise HTTPException(404, f"Разрешение с id={rp.permission_id} не найдено")
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(f"{ROLE_SERVICE_URL}/roles/{rp.role_id}")
+            if response.status_code == 404:
+                raise HTTPException(404, f"Роль с id={rp.role_id} не найдена в Role Service")
+            response.raise_for_status()
+    except httpx.TimeoutException:
+        raise HTTPException(503, "Role Service недоступен")
+    except httpx.RequestError:
+        raise HTTPException(503, "Ошибка подключения к Role Service")
 
     try:
         with db.atomic():
@@ -124,19 +137,11 @@ def create_role_permission(rp: RolePermissionCreate):
         raise HTTPException(400, "Такая связь уже существует")
 
 
-@app.get("/role-permissions/{rp_id}", response_model=RolePermissionOut)
-def get_role_permission(rp_id: int):
-    rp = RolePermission.get_or_none(RolePermission.id == rp_id)
-    if not rp:
-        raise HTTPException(404, "Связь не найдена")
-    return rp
-
-
 @app.get("/role-permissions", response_model=List[RolePermissionOut])
 def list_role_permissions(
     role_id: Optional[int] = Query(None),
     permission_id: Optional[int] = Query(None),
-    limit: int = Query(100, ge=1),
+    limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
     query = RolePermission.select()
@@ -147,7 +152,15 @@ def list_role_permissions(
     return list(query.offset(offset).limit(limit))
 
 
-@app.put("/role-permissions/{rp_id}", response_model=None)
+@app.get("/role-permissions/{rp_id}", response_model=RolePermissionOut)
+def get_role_permission(rp_id: int):
+    rp = RolePermission.get_or_none(RolePermission.id == rp_id)
+    if not rp:
+        raise HTTPException(404, "Связь не найдена")
+    return rp
+
+
+@app.put("/role-permissions/{rp_id}", response_model=ErrorResponse, status_code=405)
 def update_role_permission(rp_id: int):
     raise HTTPException(405, "Для транзитивной таблицы изменение не предусмотрено. Для изменения связи необходимо удалить существующую и создать новую.")
 

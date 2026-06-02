@@ -1,28 +1,26 @@
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel, field_validator,ConfigDict 
+from pydantic import BaseModel, field_validator, ConfigDict 
 from typing import Optional, List
 from models import Groups, db
 from peewee import *
 from pydantic import Field as PydanticField 
 from contextlib import asynccontextmanager
 import re
-"""Модели"""
 
 def createTables():
-    """Создание таблиц в базе данных"""
     db.connect()
     db.create_tables([Groups], safe=True)
     db.close()
 
 class NewGroup(BaseModel):
     year: int = PydanticField(..., ge=2000, le=2999)
-    tutor_id: Optional[int] = PydanticField(None, ge=0) 
-    student_count: Optional[int] = PydanticField(0, ge=0)
-    cipher_of_the_training_area: str = PydanticField(..., min_length=1, max_length=20)
-    number: int
+    tutor_id: Optional[int] = PydanticField(None, ge=1)
+    student_count: Optional[int] = PydanticField(0, ge=0, le=30)
+    cipher_of_the_training_area: str = PydanticField(..., min_length=1, max_length=8)
+    number: int = PydanticField(..., ge=1)
     after_class_number: int
     prefix: str = PydanticField(..., min_length=1, max_length=2)
-    """Валидаторы"""    
+    
     @field_validator('year')
     @classmethod
     def validate_year(cls, v: int) -> int:
@@ -54,8 +52,8 @@ class NewGroup(BaseModel):
     @field_validator('number')
     @classmethod
     def validate_number(cls, v: int) -> int:
-        if not (1 <= v <= 9999):
-            raise ValueError("Номер группы должен быть от 1 до 9999")
+        if v < 1:
+            raise ValueError("Номер группы должен быть от 1")
         return v
     
     @field_validator('after_class_number')
@@ -70,17 +68,20 @@ class NewGroup(BaseModel):
     def validate_prefix(cls, v: str) -> str:
         if not (1 <= len(v) <= 2):
             raise ValueError("Префикс должен содержать 1 или 2 символа")
-        return v.upper() 
+        return v.upper()
+    
+    def to_dict(self):
+        return self.model_dump()
 
 class GroupUpdate(BaseModel):
-    tutor_id: Optional[int] = PydanticField(None, ge=0)
-    student_count: Optional[int] = PydanticField(None, ge=0)
+    tutor_id: Optional[int] = PydanticField(None, ge=1)
+    student_count: Optional[int] = PydanticField(None, ge=0, le=30)
     
 class GroupResponse(BaseModel):
     id: int
     year: int
     is_active: bool
-    tutor_id: int
+    tutor_id: Optional[int]
     student_count: int
     cipher_of_the_training_area: str
     number: int
@@ -88,7 +89,6 @@ class GroupResponse(BaseModel):
     prefix: str
 
     model_config = ConfigDict(from_attributes=True)
-"""Управление соединением с БД и инициализация таблиц"""
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -99,7 +99,6 @@ async def lifespan(app: FastAPI):
     if not db.is_closed():
         db.close()
 
-
 app = FastAPI(
     title="Сервис групп",
     description="API для управления группами (вариант №7)",
@@ -107,13 +106,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-"""end-point"""
-
 @app.post("/groups", response_model=GroupResponse, status_code=201)
 def add_group(group_data: NewGroup):
     result = Groups.get_or_none(
-        (Groups.number == group_data.number)&
-        (Groups.after_class_number == group_data.after_class_number)&
+        (Groups.number == group_data.number) &
+        (Groups.after_class_number == group_data.after_class_number) &
         (Groups.prefix == group_data.prefix)
     )
 
@@ -123,96 +120,81 @@ def add_group(group_data: NewGroup):
             detail="Такая группа уже существует"
         )
 
-    group = Groups(
-        year = group_data.year,
-        is_active = True,
-        tutor_id = group_data.tutor_id,
-        student_count = group_data.student_count,
-        cipher_of_the_training_area = group_data.cipher_of_the_training_area,
-        number = group_data.number,
-        after_class_number = group_data.after_class_number,
-        prefix = group_data.prefix
-    )
+    try:
+        group = Groups(
+            year=group_data.year,
+            is_active=True,
+            tutor_id=group_data.tutor_id,
+            student_count=group_data.student_count,
+            cipher_of_the_training_area=group_data.cipher_of_the_training_area,
+            number=group_data.number,
+            after_class_number=group_data.after_class_number,
+            prefix=group_data.prefix
+        )
+        
+        group.validate()
+        group.save()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при сохранении в базу данных")
 
-    group.save()
+    return GroupResponse.model_validate(group)
 
-    return GroupResponse(
-        id = group.id,
-        year = group.year,
-        is_active = group.is_active,
-        tutor_id = group.tutor_id,
-        student_count = group.student_count,
-        cipher_of_the_training_area = group.cipher_of_the_training_area,
-        number = group.number,
-        after_class_number = group.after_class_number,
-        prefix = group.prefix,
-    )
-
-@app.put("/groups/{group_replace_for_id}", response_model=GroupResponse)
-def update(group_id: int, update_data:GroupUpdate):
+@app.put("/groups/{group_id}", response_model=GroupResponse)
+def update(group_id: int, update_data: GroupUpdate):
     group = Groups.get_or_none(Groups.id == group_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Группа не найдена")
 
-    if update_data.tutor_id is not None:
-        group.tutor_id = update_data.tutor_id
+    update_dict = update_data.model_dump(exclude_unset=True)
+    
+    if not update_dict:
+        raise HTTPException(status_code=400, detail="Нет данных для обновления")
+    
+    for key, value in update_dict.items():
+        setattr(group, key, value)
+    
+    try:
+        group.validate()
+        group.save()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при обновлении базы данных")
 
-    if update_data.student_count is not None:
-        group.student_count = update_data.student_count
+    return GroupResponse.model_validate(group)
 
-    group.save()
-
-    return GroupResponse(
-        id = group.id,
-        year = group.year,
-        is_active = group.is_active,
-        tutor_id = group.tutor_id,
-        student_count = group.student_count,
-        cipher_of_the_training_area = group.cipher_of_the_training_area,
-        number = group.number,
-        after_class_number = group.after_class_number,
-        prefix = group.prefix,
-    )
-
-@app.delete("/groups/{group_id}", status_code=204)
+@app.delete("/groups/{group_id}")
 def delete_group(group_id: int):
     group = Groups.get_or_none(Groups.id == group_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Группа не найдена")
     
-    if not group.is_active:
-        raise HTTPException(status_code=409, detail="Группа уже неактивна")
-    
     group.is_active = False
-    group.save()
-    return  
+    
+    try:
+        group.save()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ошибка при удалении группы")
+    
+    return {"deleted": True}
 
 @app.get("/groups/{group_id}", response_model=GroupResponse)
 def get_group(group_id: int):
     group = Groups.get_or_none(Groups.id == group_id)
     
     if group:
-        return GroupResponse(
-        id = group.id,
-        year = group.year,
-        is_active = group.is_active,
-        tutor_id = group.tutor_id,
-        student_count = group.student_count,
-        cipher_of_the_training_area = group.cipher_of_the_training_area,
-        number = group.number,
-        after_class_number = group.after_class_number,
-        prefix = group.prefix,
-        )
-    raise HTTPException(status_code=404, detail="Такой группы не найдено")
+        return GroupResponse.model_validate(group)
+    
+    raise HTTPException(status_code=404, detail="Группа не найдена")
 
 @app.get("/groups", response_model=List[GroupResponse])
 def get_groups(
     year: Optional[int] = None,
-    year_filter: Optional[str] = "eq",
     tutor_id: Optional[int] = None,
     is_active: Optional[bool] = None,
     student_count: Optional[int] = None,
-    student_count_filter: Optional[str] = "eq",
     cipher_of_the_training_area: Optional[str] = None,
     number: Optional[int] = None,
     after_class_number: Optional[int] = None
@@ -220,12 +202,7 @@ def get_groups(
     query = Groups.select()
 
     if year is not None:
-        if year_filter == "lt":
-            query = query.where(Groups.year < year)
-        elif year_filter == "gt":
-            query = query.where(Groups.year > year)
-        else:
-            query = query.where(Groups.year == year)
+        query = query.where(Groups.year == year)
 
     if tutor_id is not None:
         query = query.where(Groups.tutor_id == tutor_id)
@@ -234,12 +211,7 @@ def get_groups(
         query = query.where(Groups.is_active == is_active)
 
     if student_count is not None:
-        if student_count_filter == "lt":
-            query = query.where(Groups.student_count < student_count)
-        elif student_count_filter == "gt":
-            query = query.where(Groups.student_count > student_count)
-        else: 
-            query = query.where(Groups.student_count == student_count)
+        query = query.where(Groups.student_count == student_count)
 
     if cipher_of_the_training_area is not None:
         query = query.where(Groups.cipher_of_the_training_area == cipher_of_the_training_area)
@@ -252,22 +224,8 @@ def get_groups(
     
     groups = query.execute()
     
-    return [
-        GroupResponse(
-            id=group.id,
-            year=group.year,
-            is_active=group.is_active,
-            tutor_id=group.tutor_id,
-            student_count=group.student_count,
-            cipher_of_the_training_area=group.cipher_of_the_training_area,
-            number=group.number,
-            after_class_number=group.after_class_number,
-            prefix=group.prefix,
-        )
-        for group in groups
-    ]
+    return [GroupResponse.model_validate(group) for group in groups]
 
-"""Точка входа"""
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("service:app", host="127.0.0.1", port=8000, reload=True)

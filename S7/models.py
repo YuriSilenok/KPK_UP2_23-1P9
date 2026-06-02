@@ -22,27 +22,54 @@ class Groups(BaseModel):
 
     def validate(self):
 
-        if self.year is not None and not (2000 <= self.year <= 2999):
+        required_fields = {
+            'year': self.year,
+            'cipher_of_the_training_area': self.cipher_of_the_training_area,
+            'number': self.number,
+            'after_class_number': self.after_class_number,
+            'prefix': self.prefix
+        }
+        
+        for field_name, field_value in required_fields.items():
+            if field_value is None:
+                raise ValueError(f"Поле '{field_name}' обязательно для заполнения")
+
+        if not isinstance(self.year, int):
+            raise ValueError("Год должен быть целым числом")
+        if not (2000 <= self.year <= 2999):
             raise ValueError("Год должен быть в диапазоне от 2000 до 2999")
 
-        if self.tutor_id is not None and self.tutor_id <= 0:
-            raise ValueError("ID преподавателя должно быть положительным числом или None")
+        if self.tutor_id is not None: 
+            if not isinstance(self.tutor_id, int):
+                raise ValueError("ID преподавателя должно быть целым числом")
+            if self.tutor_id <= 0:
+                raise ValueError("ID преподавателя должно быть положительным числом")
 
-        if self.student_count is not None and not (0 <= self.student_count <= 30):
-            raise ValueError("Количество студентов должно быть от 0 до 30")
+        if self.student_count is not None: 
+            if not isinstance(self.student_count, int):
+                raise ValueError("Количество студентов должно быть целым числом")
+            if not (0 <= self.student_count <= 30):
+                raise ValueError("Количество студентов должно быть от 0 до 30")
 
-        if self.cipher_of_the_training_area:
-            if not re.match(r'^\d{2}\.\d{2}\.\d{2}$', self.cipher_of_the_training_area):
-                raise ValueError("Шифр должен быть в формате XX.XX.XX")
+        if not isinstance(self.cipher_of_the_training_area, str):
+            raise ValueError("Шифр должен быть строкой")
+        if not re.match(r'^\d{2}\.\d{2}\.\d{2}$', self.cipher_of_the_training_area):
+            raise ValueError("Шифр должен быть в формате XX.XX.XX")
 
-        if self.number is not None and not (1 <= self.number <= 9999):
-            raise ValueError("Номер группы должен быть от 1 до 9999")
+        if not isinstance(self.number, int):
+            raise ValueError("Номер группы должен быть целым числом")
+        if self.number < 1:
+            raise ValueError("Номер группы должен быть от 1")
 
-        if self.after_class_number is not None and self.after_class_number not in [9, 11]:
+        if self.after_class_number not in [9, 11]:
             raise ValueError("Количество классов после обучения должно быть 9 или 11")
 
-        if self.prefix and not (1 <= len(self.prefix) <= 2):
+        if not isinstance(self.prefix, str):
+            raise ValueError("Префикс должен быть строкой")
+        if not (1 <= len(self.prefix) <= 2):
             raise ValueError("Префикс должен содержать 1 или 2 символа")
+        
+        return True
 
 def init_db():
     db.connect()

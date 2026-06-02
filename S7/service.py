@@ -16,7 +16,7 @@ class NewGroup(BaseModel):
     year: int = PydanticField(..., ge=2000, le=2999)
     tutor_id: Optional[int] = PydanticField(None, ge=1)
     student_count: Optional[int] = PydanticField(0, ge=0, le=30)
-    cipher_of_the_training_area: str = PydanticField(..., min_length=8, max_length=8)
+    cipher_of_the_training_area: str = PydanticField(...)
     number: int = PydanticField(..., ge=1)
     after_class_number: int
     prefix: str = PydanticField(..., min_length=1, max_length=2)
@@ -60,7 +60,7 @@ class NewGroup(BaseModel):
     @classmethod
     def validate_after_class_number(cls, v: int) -> int:
         if v not in [9, 11]:
-            raise ValueError("Количество классов после обучения должно быть 9 или 11")
+            raise ValueError("После какого класса поступили должно быть 9 или 11")
         return v
     
     @field_validator('prefix')
@@ -83,6 +83,10 @@ class GroupUpdate(BaseModel):
         if v is not None and v <= 0:
             raise ValueError("ID преподавателя должен быть положительным числом")
         return v
+    
+    def model_dump_with_skip_none(self):
+        """Возвращает только те поля, которые были явно указаны (не None)"""
+        return {k: v for k, v in self.model_dump().items() if v is not None}
     
 class GroupResponse(BaseModel):
     id: int
@@ -115,37 +119,43 @@ app = FastAPI(
 
 @app.post("/groups", response_model=GroupResponse, status_code=201)
 def add_group(group_data: NewGroup):
-    existing_group = Groups.get_or_none(
-        (Groups.number == group_data.number) &
-        (Groups.after_class_number == group_data.after_class_number) &
-        (Groups.prefix == group_data.prefix) &
-        (Groups.is_active == True)
-    )
-
-    if existing_group:
-        raise HTTPException(
-            status_code=409,
-            detail="Активная группа с такими параметрами уже существует"
+    # Используем транзакцию для атомарности
+    with db.atomic():
+        existing_group = Groups.get_or_none(
+            (Groups.number == group_data.number) &
+            (Groups.after_class_number == group_data.after_class_number) &
+            (Groups.prefix == group_data.prefix) &
+            (Groups.is_active == True)
         )
 
-    try:
-        group = Groups(
-            year=group_data.year,
-            is_active=True,
-            tutor_id=group_data.tutor_id,
-            student_count=group_data.student_count,
-            cipher_of_the_training_area=group_data.cipher_of_the_training_area,
-            number=group_data.number,
-            after_class_number=group_data.after_class_number,
-            prefix=group_data.prefix
-        )
-        
-        group.validate()
-        group.save()
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка при сохранении в базу данных")
+        if existing_group:
+            raise HTTPException(
+                status_code=409,
+                detail="Активная группа с такими параметрами уже существует"
+            )
+
+        try:
+            group = Groups(
+                year=group_data.year,
+                is_active=True,
+                tutor_id=group_data.tutor_id,
+                student_count=group_data.student_count,
+                cipher_of_the_training_area=group_data.cipher_of_the_training_area,
+                number=group_data.number,
+                after_class_number=group_data.after_class_number,
+                prefix=group_data.prefix
+            )
+            
+            group.validate()
+            rows_affected = group.save()
+            
+            if rows_affected == 0:
+                raise HTTPException(status_code=500, detail="Не удалось сохранить группу")
+                
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="Ошибка при сохранении в базу данных")
 
     return GroupResponse.model_validate(group)
 
@@ -155,7 +165,7 @@ def update(group_id: int, update_data: GroupUpdate):
     if group is None:
         raise HTTPException(status_code=404, detail="Группа не найдена")
 
-    update_dict = update_data.model_dump(exclude_unset=True)
+    update_dict = update_data.model_dump_with_skip_none()
     
     if not update_dict:
         raise HTTPException(status_code=400, detail="Нет данных для обновления")
@@ -165,7 +175,11 @@ def update(group_id: int, update_data: GroupUpdate):
     
     try:
         group.validate()
-        group.save()
+        rows_affected = group.save()
+        
+        if rows_affected == 0:
+            raise HTTPException(status_code=500, detail="Не удалось обновить группу")
+            
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
@@ -179,10 +193,14 @@ def delete_group(group_id: int):
     if group is None:
         raise HTTPException(status_code=404, detail="Группа не найдена")
     
-    group.is_active = False
-    
+    # Используем метод модели вместо прямой установки
     try:
-        group.save()
+        group.soft_delete()
+        rows_affected = group.save()
+        
+        if rows_affected == 0:
+            raise HTTPException(status_code=500, detail="Не удалось удалить группу")
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при удалении группы")
     

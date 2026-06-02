@@ -130,7 +130,7 @@ def create_role_permission(rp: RolePermissionCreate):
     except httpx.RequestError:
         raise HTTPException(503, "Ошибка подключения к Role Service")
 
-    permission = Permission.get_or_none(Permission.id == rp.permission_id)
+    permission = Permission.get_or_none((Permission.id == rp.permission_id) & (Permission.is_active == True))
     if not permission:
         raise HTTPException(404, f"Разрешение с id={rp.permission_id} не найдено")
 
@@ -145,7 +145,7 @@ def create_role_permission(rp: RolePermissionCreate):
 def list_role_permissions(
     role_id: Optional[int] = Query(None),
     permission_id: Optional[int] = Query(None),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(100, ge=1),
     offset: int = Query(0, ge=0)
 ):
     query = RolePermission.select()

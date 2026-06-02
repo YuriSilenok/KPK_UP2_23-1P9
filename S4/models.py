@@ -21,7 +21,7 @@ class RolePermission(Model):
         database = db
         table_name = 'role_permissions'
         indexes = (
-            (('role_id', 'permission_id'), True),
+            (('role_id', 'permission'), True),
         )
 
 def init_db():

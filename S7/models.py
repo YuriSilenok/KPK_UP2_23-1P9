@@ -14,11 +14,11 @@ class Groups(BaseModel):
     year = IntegerField(null=False)
     is_active = BooleanField(default=True) 
     tutor_id = IntegerField(null=True, default=None)
-    student_count = IntegerField(default=0)
+    student_count = IntegerField(none=False,default=0)
     cipher_of_the_training_area = CharField(null=False, max_length=8)
     number = IntegerField(null=False)
     after_class_number = IntegerField(null=False)
-    prefix = CharField(null=False)
+    prefix = CharField(max_length=2,null=False)
 
     def validate(self):
 
@@ -45,7 +45,7 @@ class Groups(BaseModel):
             if self.tutor_id <= 0:
                 raise ValueError("ID преподавателя должно быть положительным числом")
 
-        if self.student_count is not None: 
+        if self.student_count: 
             if not isinstance(self.student_count, int):
                 raise ValueError("Количество студентов должно быть целым числом")
             if not (0 <= self.student_count <= 30):
@@ -62,7 +62,7 @@ class Groups(BaseModel):
             raise ValueError("Номер группы должен быть от 1")
 
         if self.after_class_number not in [9, 11]:
-            raise ValueError("Количество классов после обучения должно быть 9 или 11")
+            raise ValueError("После какого класса поступили должно быть 9 или 11")
 
         if not isinstance(self.prefix, str):
             raise ValueError("Префикс должен быть строкой")

@@ -16,7 +16,7 @@ class NewGroup(BaseModel):
     year: int = PydanticField(..., ge=2000, le=2999)
     tutor_id: Optional[int] = PydanticField(None, ge=1)
     student_count: Optional[int] = PydanticField(0, ge=0, le=30)
-    cipher_of_the_training_area: str = PydanticField(..., min_length=1, max_length=8)
+    cipher_of_the_training_area: str = PydanticField(..., min_length=8, max_length=8)
     number: int = PydanticField(..., ge=1)
     after_class_number: int
     prefix: str = PydanticField(..., min_length=1, max_length=2)
@@ -32,7 +32,7 @@ class NewGroup(BaseModel):
     @classmethod
     def validate_tutor_id(cls, v: Optional[int]) -> Optional[int]:
         if v is not None and v <= 0:
-            raise ValueError("ID преподавателя должно быть положительным числом или None")
+            raise ValueError("ID преподавателя должен быть положительным числом")
         return v
     
     @field_validator('student_count')
@@ -68,7 +68,7 @@ class NewGroup(BaseModel):
     def validate_prefix(cls, v: str) -> str:
         if not (1 <= len(v) <= 2):
             raise ValueError("Префикс должен содержать 1 или 2 символа")
-        return v.upper()
+        return v
     
     def to_dict(self):
         return self.model_dump()
@@ -76,6 +76,13 @@ class NewGroup(BaseModel):
 class GroupUpdate(BaseModel):
     tutor_id: Optional[int] = PydanticField(None, ge=1)
     student_count: Optional[int] = PydanticField(None, ge=0, le=30)
+    
+    @field_validator('tutor_id')
+    @classmethod
+    def validate_tutor_id(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v <= 0:
+            raise ValueError("ID преподавателя должен быть положительным числом")
+        return v
     
 class GroupResponse(BaseModel):
     id: int
@@ -108,16 +115,17 @@ app = FastAPI(
 
 @app.post("/groups", response_model=GroupResponse, status_code=201)
 def add_group(group_data: NewGroup):
-    result = Groups.get_or_none(
+    existing_group = Groups.get_or_none(
         (Groups.number == group_data.number) &
         (Groups.after_class_number == group_data.after_class_number) &
-        (Groups.prefix == group_data.prefix)
+        (Groups.prefix == group_data.prefix) &
+        (Groups.is_active == True)
     )
 
-    if result:
+    if existing_group:
         raise HTTPException(
             status_code=409,
-            detail="Такая группа уже существует"
+            detail="Активная группа с такими параметрами уже существует"
         )
 
     try:
@@ -192,9 +200,11 @@ def get_group(group_id: int):
 @app.get("/groups", response_model=List[GroupResponse])
 def get_groups(
     year: Optional[int] = None,
+    year_filter: Optional[str] = Query("eq", regex="^(eq|lt|gt)$"),
     tutor_id: Optional[int] = None,
     is_active: Optional[bool] = None,
     student_count: Optional[int] = None,
+    student_count_filter: Optional[str] = Query("eq", regex="^(eq|lt|gt)$"),
     cipher_of_the_training_area: Optional[str] = None,
     number: Optional[int] = None,
     after_class_number: Optional[int] = None
@@ -202,7 +212,12 @@ def get_groups(
     query = Groups.select()
 
     if year is not None:
-        query = query.where(Groups.year == year)
+        if year_filter == "lt":
+            query = query.where(Groups.year < year)
+        elif year_filter == "gt":
+            query = query.where(Groups.year > year)
+        else:
+            query = query.where(Groups.year == year)
 
     if tutor_id is not None:
         query = query.where(Groups.tutor_id == tutor_id)
@@ -211,7 +226,12 @@ def get_groups(
         query = query.where(Groups.is_active == is_active)
 
     if student_count is not None:
-        query = query.where(Groups.student_count == student_count)
+        if student_count_filter == "lt":
+            query = query.where(Groups.student_count < student_count)
+        elif student_count_filter == "gt":
+            query = query.where(Groups.student_count > student_count)
+        else:
+            query = query.where(Groups.student_count == student_count)
 
     if cipher_of_the_training_area is not None:
         query = query.where(Groups.cipher_of_the_training_area == cipher_of_the_training_area)

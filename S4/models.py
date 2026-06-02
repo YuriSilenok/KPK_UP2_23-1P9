@@ -15,7 +15,7 @@ class Permission(Model):
 class RolePermission(Model):
     id = AutoField(primary_key=True)
     role_id = IntegerField(null=False)
-    permission_id = ForeignKeyField(Permission, backref='role_permissions', on_delete='CASCADE')
+    permission = ForeignKeyField(Permission, backref='role_permissions', on_delete='CASCADE')
 
     class Meta:
         database = db

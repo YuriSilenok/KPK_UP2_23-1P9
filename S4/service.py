@@ -130,6 +130,10 @@ def create_role_permission(rp: RolePermissionCreate):
     except httpx.RequestError:
         raise HTTPException(503, "Ошибка подключения к Role Service")
 
+    permission = Permission.get_or_none(Permission.id == rp.permission_id)
+    if not permission:
+        raise HTTPException(404, f"Разрешение с id={rp.permission_id} не найдено")
+
     try:
         with db.atomic():
             return RolePermission.create(role_id=rp.role_id, permission_id=rp.permission_id)

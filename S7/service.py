@@ -196,13 +196,12 @@ def delete_group(group_id: int):
     # Используем метод модели вместо прямой установки
     try:
         group.soft_delete()
-        rows_affected = group.save()
         
         if rows_affected == 0:
-            raise HTTPException(status_code=500, detail="Не удалось удалить группу")
+            raise HTTPException(status_code=400, detail="Не удалось удалить группу")
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка при удалении группы")
+        raise HTTPException(status_code=400, detail="Ошибка при удалении группы")
     
     return {"deleted": True}
 

@@ -1,2 +1,3 @@
 peewee
-playhouse
+fastapi
+pydantic
